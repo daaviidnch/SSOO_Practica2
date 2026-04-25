@@ -1,24 +1,55 @@
 import socket
+import sys
 import threading
 
-def listen(sock):
-    while True:
+
+def receiver(sock: socket.socket):
+    reader = sock.makefile("r", encoding="utf-8", newline="\n")
+    try:
+        while True:
+            line = reader.readline()
+            if not line:
+                print("Conexión cerrada por el servidor.")
+                break
+            print("SERVER>", line.strip())
+    finally:
         try:
-            print(sock.recv(1024).decode())
-        except:
-            break
+            reader.close()
+        except Exception:
+            pass
 
-host = input("host: ")
-gid = input("game id: ")
-name = input("name: ")
 
-s = socket.socket()
-s.connect((host, 9000))
+def main():
+    if len(sys.argv) < 4:
+        print("Uso: python client.py <host> <game_id> <nombre> [port]")
+        return
 
-threading.Thread(target=listen, args=(s,), daemon=True).start()
+    host = sys.argv[1]
+    game_id = sys.argv[2]
+    name = sys.argv[3]
+    port = int(sys.argv[4]) if len(sys.argv) >= 5 else 9100
 
-s.sendall(f"JOIN {gid} {name}\n".encode())
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.connect((host, port))
 
-while True:
-    msg = input("> ")
-    s.sendall((msg + "\n").encode())
+    threading.Thread(target=receiver, args=(sock,), daemon=True).start()
+
+    sock.sendall(f"JOIN {game_id} {name}\n".encode("utf-8"))
+
+    try:
+        while True:
+            cmd = input("> ").strip()
+            if not cmd:
+                continue
+            sock.sendall((cmd + "\n").encode("utf-8"))
+            if cmd.upper() == "QUIT":
+                break
+    finally:
+        try:
+            sock.close()
+        except Exception:
+            pass
+
+
+if __name__ == "__main__":
+    main()
